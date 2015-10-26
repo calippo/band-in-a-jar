@@ -13,31 +13,48 @@ object A extends Chord(key = 10)
 object D extends Chord(key = 3)
 object E extends Chord(key = 5)
 
-case class Progression(chords: List[Chord])
+
+case class DynamicType(velocity: Int)
+object DynamicTypes {
+  object Staccato extends DynamicType(96)
+  object Legato extends DynamicType(72)
+}
+
+case class DynamicNote(tempo: Int, tpe: DynamicType)
+
+object base {
+  type Strumming = List[DynamicNote]
+  type Progression = List[Chord]
+}
+
+import base._
 
 object ProgressionOps {
   implicit class ProgressionOp(p: Progression) {
-    def |(c: Chord): Progression = Progression(p.chords :+ c)
+    def | (c: Chord): Progression = p :+ c
 
-    def sequencify(strumming: List[Int]): Sequence = {
+    def sequencify(strumming: Strumming): Sequence = {
       import MIDIFuncs._
 
-      val events: Seq[MidiEvent] = p.chords.foldLeft((Seq[MidiEvent](), 0)) { (acc, c) =>
+      val events: Seq[MidiEvent] = p.foldLeft((Seq[MidiEvent](), 0)) { (acc, c) =>
         val (chords, time)= acc
-        (chords ++ strum(c.key, c.notes, time, strumming), time + strumming.sum)
+        val newTime = time + strumming.map(_.tempo).sum
+        (chords ++ strum(c.key, c.notes, time, strumming), newTime)
       }._1
 
       val sequence = new Sequence(Sequence.PPQ, 1)
       val track = sequence.createTrack()
+
       events.foreach(track.add(_))
       sequence
     }
 
-    def play(strumming: List[Int]): Unit = {
+    def play(strumming: Strumming): Unit = {
       val cl = classOf[javax.sound.midi.MidiSystem].getClassLoader
       Thread.currentThread.setContextClassLoader(cl)
 
       val sequencer = MidiSystem.getSequencer()
+      MidiSystem.getSynthesizer().getAvailableInstruments().toList.map(println(_))
       sequencer.open()
       sequencer.setSequence(p.sequencify(strumming))
       sequencer.start()
@@ -46,37 +63,37 @@ object ProgressionOps {
 }
 
 object MIDIFuncs {
-  def noteONMessage(key: Int) = noteMessage(key, true)
-  def noteOFFMessage(key: Int) = noteMessage(key, false)
+  private[this] def noteONMessage(key: Int, velocity: Int) = noteMessage(key, velocity, true)
+  private[this] def noteOFFMessage(key: Int, velocity: Int) = noteMessage(key, velocity, false)
 
-  def noteMessage(key: Int, on: Boolean) = {
+  private[this] def noteMessage(key: Int, velocity: Int, on: Boolean) = {
     val msg = new ShortMessage()
     val t = if (on) ShortMessage.NOTE_ON else ShortMessage.NOTE_OFF
-    msg.setMessage(t, 0, 48 + key, 127)
+    msg.setMessage(t, 0, 48 + key, velocity)
     msg
   }
 
-  def note(key: Int, up: Int, down: Int): (MidiEvent, MidiEvent) =
-    (new MidiEvent(noteONMessage(key), up), new MidiEvent(noteOFFMessage(key), down))
+  def note(key: Int, up: Int, down: Int, velocity: Int): (MidiEvent, MidiEvent) =
+    (new MidiEvent(noteONMessage(key, velocity), up), new MidiEvent(noteOFFMessage(key, velocity), down))
 
-  def strum(key: Int, notes: Seq[Int], time: Int, strumming: Seq[Int]): Seq[MidiEvent] = {
+  def strum(key: Int, notes: Seq[Int], time: Int, strumming: Seq[DynamicNote]): Seq[MidiEvent] = {
     strumming.foldLeft((Seq[MidiEvent](), time)) { (acc, v) =>
       val (events, startingTime) = acc
-      (events ++ chord(key, notes, startingTime, v), v + startingTime)
+      (events ++ chord(key, notes, startingTime, v.tempo, v.tpe), v.tempo + startingTime)
     }._1
   }
 
-  def chord(key: Int, notes: Seq[Int], up: Int, duration: Int): Seq[MidiEvent] =
+  def chord(key: Int, notes: Seq[Int], up: Int, duration: Int, tpe: DynamicType): Seq[MidiEvent] =
     notes.foldLeft(Seq[MidiEvent]()) { (acc, v) =>
-      val (noteUp, noteDown) = note(key + v, up, up + duration)
+      val (noteUp, noteDown) = note(key + v, up, up + duration, tpe.velocity)
       acc ++ Seq(noteUp, noteDown)
     }
 }
 
 object ChordsOps {
   implicit class ChordOp(c: Chord) {
-    def |(c2: Chord): Progression = {
-      Progression(List(c, c2))
+    def | (c2: Chord): Progression = {
+      List(c, c2)
     }
 
     def + (ct: ChordType): Chord = {
@@ -85,18 +102,34 @@ object ChordsOps {
   }
 }
 
-object Main extends App {
+object setup {
+  import DynamicTypes._
   import ChordsOps._
-  import ProgressionOps._
 
   val Am7 = A + Minor + Seven
   val Dm7 = D + Minor + Seven
   val Em7 = E + Minor + Seven
 
-  val progression = Am7 | Dm7 | Am7 | Am7 | Dm7 | Dm7 | Am7 | Am7 | Em7 | Dm7 | Am7 | Am7
+  val A7 = A + Major + Seven
+  val D7 = D + Major + Seven
+  val E7 = E + Major + Seven
 
-//  val strumming = 1  ͜ 2 • 1  ͜ 2 • 1
+  val S2 = DynamicNote(2, Staccato)
+  val S1 = DynamicNote(1, Staccato)
+  val L2 = DynamicNote(2, Legato)
+  val L1 = DynamicNote(1, Legato)
+}
 
-  val strumming = List(2,1,2,1)
+object Main extends App {
+  import ProgressionOps._
+  import ChordsOps._
+  import setup._
+
+  val progression = A7 | D7 | A7 | A7 |
+                    D7 | D7 | A7 | A7 |
+                    E7 | D7 | A7 | A7
+
+  val strumming = L2 :: S1 :: L2 :: L1 :: Nil
+
   progression.play(strumming)
 }
