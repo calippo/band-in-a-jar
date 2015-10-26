@@ -5,13 +5,16 @@ case class ChordType(notes: Seq[Int] = Seq.empty)
 
 //C, C#, D, D#, E, F, F#, G, G#,  A, A#,  B
 //1,  2, 3,  4, 5, 6,  7, 8,  9, 10, 11, 12
-object Minor extends ChordType(Seq(1, 5, 7))
+object Minor extends ChordType(Seq(1, 4, 8))
 object Major extends ChordType(Seq(1, 5, 8))
 object Seven extends ChordType(Seq(11))
+object MajorSeven extends ChordType(Seq(12))
 
 object A extends Chord(key = 10)
+object G extends Chord(key = 8)
 object D extends Chord(key = 3)
 object E extends Chord(key = 5)
+object C extends Chord(key = 1)
 
 
 case class DynamicType(velocity: Int)
