@@ -11,5 +11,6 @@ object Main extends App {
     D7 | D7 | A7 | A7 |
     E7  | D7 | A7 | E7
 
-  progression play (12 bar blues, 80 bpm, 2 times)
+  progression write ("out.mid", 12 bar blues, 80 bpm, 2 times)
+  System.exit(1)
 }

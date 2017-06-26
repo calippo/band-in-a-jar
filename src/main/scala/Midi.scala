@@ -69,5 +69,25 @@ object ProgressionMidiOps {
       sequencer.setSequence(s)
       sequencer.start()
     }
+
+    def writeMidi(filename: String, genre: Genre, bpm: Bpm, times: Times, _strumming: Option[Strumming] = None): Unit = {
+      val cl = classOf[javax.sound.midi.MidiSystem].getClassLoader
+      Thread.currentThread.setContextClassLoader(cl)
+
+      val sequencer = MidiSystem.getSequencer()
+
+      val strumming = _strumming.getOrElse(genre.strumming)
+      val is = new java.io.FileInputStream(genre.midiName)
+      val s = MidiSystem.getSequence(is)
+      sequencer.open()
+      sequencer.setTempoInBPM(bpm.v)
+      sequencer.setLoopCount(times.v)
+      val track = s.createTrack()
+      val events = p.events(strumming)
+      events.foreach(track.add(_))
+      sequencer.setSequence(s)
+      MidiSystem.write(s, 1, new java.io.File(filename))
+      println("done")
+    }
   }
 }
